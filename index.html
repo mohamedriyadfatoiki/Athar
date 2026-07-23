@@ -822,11 +822,50 @@
       if (e.key === 'Escape') closeModal();
     });
 
-    function submitMessage() {
+    // ===================== AI MODERATION (GEMINI) =====================
+    async function checkContentWithAI(to, message, from) {
+      const apiKey = "AQ.Ab8RN6JVQjEag7K_dzWNhy022ta6tfVIWO9ozsrAwF_Rss632w";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      
+      const prompt = `You are an AI content moderator for a solemn memorial and prayer website named "Athar".
+    Analyze the following submission:
+    To: ${to}
+    Message: ${message}
+    From: ${from}
+
+    Rules:
+    1. Reply ONLY with the word "APPROVED" if the message is respectful, a prayer, a genuine memory, emotional, or appropriate for a memorial site (even in Arabic/Darija/English/French).
+    2. Reply ONLY with the word "FLAGGED" if the message contains hate speech, severe insults, vulgar language, explicit content, spam, or disrespect towards the deceased/users.
+
+    Response format (ONE WORD ONLY):`;
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
+        });
+
+        if (!response.ok) throw new Error("API Request failed");
+
+        const data = await response.json();
+        const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toUpperCase();
+        
+        return resultText.includes("APPROVED");
+      } catch (error) {
+        console.error("AI Moderation error, falling back to manual review:", error);
+        return false; 
+      }
+    }
+
+    async function submitMessage() {
       const to = document.getElementById('input-to').value.trim();
       const message = document.getElementById('input-message').value.trim();
       const from = document.getElementById('input-from').value.trim();
       const errorEl = document.getElementById('form-error');
+      const submitBtn = document.querySelector('#modal-form .btn-primary');
 
       errorEl.classList.remove('show');
 
@@ -839,6 +878,14 @@
         return;
       }
 
+      // Changement f l'bouton bash l'utilisateur i3rf l'IA kayf7as l'message
+      const originalBtnText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending to the sky...';
+
+      // F7s l'message b l'IA Gemini
+      const isApprovedByAI = await checkContentWithAI(to, message, from || 'Anonymous');
+
       const newMsg = {
         id: generateId(),
         to: to,
@@ -846,11 +893,15 @@
         from: from || 'Anonymous',
         timestamp: Date.now(),
         candles: 0,
-        approved: false,
+        approved: isApprovedByAI,
         reported: false
       };
 
-      saveMessage(newMsg);
+      await saveMessage(newMsg);
+      
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalBtnText;
+
       document.getElementById('modal-form').style.display = 'none';
       document.getElementById('modal-success').style.display = 'block';
 
